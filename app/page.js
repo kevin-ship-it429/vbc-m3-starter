@@ -304,7 +304,15 @@ export default function HomePage() {
                     {breakLongWords(request.requester_name)}
                   </td>
                   <td>{request.location}</td>
-                  <td className="wrap-cell">
+                  <td
+                    className="wrap-cell"
+                    // Table shows the first 80 characters; hover shows it all.
+                    title={
+                      request.description && request.description.length > 80
+                        ? request.description
+                        : undefined
+                    }
+                  >
                     {breakLongWords(truncate(request.description))}
                   </td>
                   <td>

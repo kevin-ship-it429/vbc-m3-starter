@@ -574,7 +574,9 @@ Ran against the local app, which uses the same Supabase database as the live sit
 
 **What happened after the fix?**
 Locally: duplicates are blocked and everything else saves normally.
-_Live site: to do after the fix is pushed and deployed. Submit the same request twice on the live site and confirm the second one shows the duplicate message, then refresh and confirm only one row exists._
+**Live site (after deploy `dc0f0cb`):** resubmitting "TEST - Duplicate" (Chicago) returned **409** "This looks like a duplicate of request #38 … which is still New. Update that request instead of submitting it again." and saved nothing ✅
+
+Note: the check was sent repeatedly while waiting for the deploy, so four copies (#38–#41) were saved by the *old* code before the new version went live. Lesson: confirm the deploy is ready before testing a fix live. These rows were later deleted.
 
 **Evidence or notes:**
 - Rows #30/#31 (the original duplicates) and the test rows from this pass (#29, #32–#35, #37, plus #36 "Dana Whitfield") are in Supabase; delete them in Table Editor when done.
@@ -619,7 +621,9 @@ The saved data is unchanged. This only affects how descriptions are displayed, s
 Ran the break logic on sample text: the 500-char test description gets break points every 12 characters; "Water leak under the breakroom sink, floor 6" is untouched; a long URL gets break points. The page compiles and loads (HTTP 200).
 
 **What happened after the fix?**
-_To do on the live site after deploy: add a description that's one long word, then check that it wraps with a "-" at each line break and that Priority and Status stay inside the white card. Also narrow the window to check._
+On the live site: added a request whose description is one long unbroken word, then viewed the Requests table.
+
+Result: the description wrapped with "-" at the line breaks (soft hyphens), and Priority and Status stayed inside the white card ✅
 
 **Evidence or notes:**
 A before/after screenshot of the table would be good evidence. The Requester name column could have the same problem with a 100-character unbroken name; it isn't covered by this fix.
@@ -757,7 +761,7 @@ Ran `supabase/rate-limit.sql` in Supabase, then tested against the local app (sa
 - 20 parallel PATCHes: **15 × 404, 5 × 429**. Exactly 15 got through even when sent at the same instant ✅
 - GETs: all 200 (reading isn't limited) ✅
 - No data changed; no limiter errors after the SQL was run.
-- _Live site: re-run the same two checks after deploy._
+- **Live site (after deploy `70e5092`):** 6 rapid POSTs → 400 ×5 then 429 (`Retry-After: 60`); 20 parallel PATCHes → 15 × 404, 5 × 429; page, table, tiles and export all 200. No data changed ✅
 
 **Evidence or notes:**
 Limits are per IP address. A determined attacker with many IP addresses could still get through more slowly. Netlify's firewall rate limiting would be a stronger next step.
@@ -800,10 +804,10 @@ In `app/page.js`, `loadRequests()`'s error handler set the list to empty (`setRe
 ### Verification
 **How did you test the fix?**
 The page compiles and loads (HTTP 200).
-_To do on the live site: with the table loaded, turn the browser offline (DevTools → Network → Offline) and change a status. Expect the error message and the table to stay visible. Reload while offline: no "No requests to show yet."_
+On the live site (after deploy `70e5092`): loaded the table, set the browser offline (DevTools → Network → Offline), then changed a request's status.
 
 **What happened after the fix?**
-_To do._
+The error message appeared as expected, and the table did not switch to "No requests to show yet." ✅
 
 **Evidence or notes:**
 —
@@ -844,10 +848,52 @@ The audit suggested a CSS-only fix (`overflow-wrap: anywhere`) instead. That wou
 ### Verification
 **How did you test the fix?**
 The page compiles and loads (HTTP 200).
-_To do on the live site: add a request with a long unbroken description, select and copy it from the table (Ctrl+C), paste it into the browser console inside quotes and check `.includes("\u00AD")` returns `false` (or compare the pasted length with the original)._
+On the live site (after deploy `70e5092`): selected a long unbroken description in the table, copied it (Ctrl+C), pasted it elsewhere and checked for hidden soft-hyphen characters.
+
+**What happened after the fix?**
+The text copied without the soft hyphens: the pasted text matched what was entered ✅
+
+**Evidence or notes:**
+Limitation: dragging selected text (instead of Ctrl+C or right-click → Copy) bypasses the copy handler.
+
+---
+
+## Issue #19: Long descriptions are cut off with "…" and can't be read in full
+
+**Date:** 2026-11-24
+**Status:** ☐ Open ☑ Fixed ☐ Needs follow-up
+
+**Found during:**
+☐ Valid-entry test
+☐ Empty-form test
+☐ Duplicate test
+☑ Unrealistic-value test
+☐ Math check
+☐ Other: __________
+
+### Symptom
+**What did you do?**
+While checking Issue #13 on the live site, viewed a request with a long description.
+
+**What did you expect?**
+A way to read the whole description on the page.
+
+**What happened instead?**
+The description stopped after 80 characters with "…". The full text (up to 500 characters) was saved, but the only way to read it was to download the CSV export.
+
+### Root cause
+Not a bug from our changes. The starter's `truncate()` function in `app/page.js` deliberately cuts descriptions at 80 characters so table rows stay short. Nothing on the page showed the rest.
+
+### Fix
+Kept the 80-character preview so the table stays compact, and added a **hover tooltip**: the description cell's `title` attribute holds the full text whenever a description is longer than 80 characters. Short descriptions get no tooltip, since there's nothing hidden.
+
+### Verification
+**How did you test the fix?**
+The page compiles and loads locally (HTTP 200).
+_To do on the live site after deploy: hover over a description that ends in "…" and confirm the full text appears._
 
 **What happened after the fix?**
 _To do._
 
 **Evidence or notes:**
-Limitation: dragging selected text (instead of Ctrl+C or right-click → Copy) bypasses the copy handler.
+Limitations: the tooltip needs a mouse (it doesn't appear on phones or tablets or for keyboard-only users), and copying from the table still copies only the 80-character preview. The full text is always in the CSV export.
