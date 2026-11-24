@@ -708,3 +708,146 @@ _To do on the live site after deploy: submit a request with a long unbroken name
 
 **Evidence or notes:**
 A screenshot would be good evidence.
+
+---
+
+## Issue #16: No rate limiting on writes (security audit: Medium)
+
+**Date:** 2026-11-24
+**Status:** ☐ Open ☑ Fixed ☐ Needs follow-up
+
+**Found during:**
+☐ Valid-entry test
+☐ Empty-form test
+☐ Duplicate test
+☐ Unrealistic-value test
+☐ Math check
+☑ Other: Security audit (OpenCode)
+
+### Symptom
+**What did you do?**
+Ran an automated security audit against the live site.
+
+**What did you expect?**
+Rapid-fire write requests from one visitor would be slowed down or refused.
+
+**What happened instead?**
+20 parallel status updates (PATCH) all returned 200, and 3 rapid new-request submissions (POST) all returned 201. Nothing stopped a script from flooding the database with requests or flipping statuses back and forth.
+
+### Root cause
+The API had no limit on how often one visitor could write. On Netlify, a simple in-memory counter wouldn't work: the API runs as many short-lived copies that don't share memory, so each copy would count separately.
+
+### Fix
+Count write attempts in Supabase, which all copies share:
+- `supabase/rate-limit.sql`: a `rate_limit_hits` table (locked: access rules on with no permissions, so the app can't read or edit it directly) and a `check_rate_limit()` database function that counts a visitor's recent attempts, records the new one, and handles simultaneous requests one at a time so 20 parallel requests can't all slip through.
+- `lib/rateLimit.js`: identifies the visitor by IP address (stored only as a one-way hash, never the raw IP) and calls the function. Over the limit → **429** "Too many … in a short time (limit N per minute). Please wait a minute and try again."
+- Limits, per visitor per rolling minute: **5 new requests**, **15 status changes**. Invalid attempts count too, so bad requests can't be used to probe freely. Reading (table, tiles, export) isn't limited.
+- If the limiter itself fails (e.g. the SQL hasn't been run), it logs the error and lets the request through, so a limiter problem can't take the whole app down.
+
+### Verification
+**How did you test the fix?**
+Ran `supabase/rate-limit.sql` in Supabase, then tested against the local app (same database) using requests that save nothing:
+1. 6 rapid empty-form POSTs
+2. 20 parallel PATCHes to a missing id (999)
+3. Repeated GETs
+
+**What happened after the fix?**
+- Before the SQL was run: the app kept working (400/404 as normal) and logged "Rate limit check failed (allowing request)", confirming the fail-open safety net.
+- 6 rapid POSTs: **400 400 400 400 400 429**, with the 6th getting `429 Too Many Requests`, `Retry-After: 60`, "Too many new requests in a short time (limit 5 per minute)…" ✅
+- 20 parallel PATCHes: **15 × 404, 5 × 429**. Exactly 15 got through even when sent at the same instant ✅
+- GETs: all 200 (reading isn't limited) ✅
+- No data changed; no limiter errors after the SQL was run.
+- _Live site: re-run the same two checks after deploy._
+
+**Evidence or notes:**
+Limits are per IP address. A determined attacker with many IP addresses could still get through more slowly. Netlify's firewall rate limiting would be a stronger next step.
+
+---
+
+## Issue #17: A failed load shows "No requests to show yet." (security audit: Low)
+
+**Date:** 2026-11-24
+**Status:** ☐ Open ☑ Fixed ☐ Needs follow-up
+
+**Found during:**
+☐ Valid-entry test
+☐ Empty-form test
+☐ Duplicate test
+☐ Unrealistic-value test
+☐ Math check
+☑ Other: Security audit (OpenCode)
+
+### Symptom
+**What did you do?**
+The audit reviewed what the page does when loading the request list fails (e.g. the server is down or the network drops), both on first load and when refreshing the list after a status change.
+
+**What did you expect?**
+An error message saying the list couldn't be loaded.
+
+**What happened instead?**
+The page wiped the list and showed "No requests to show yet." A coordinator would think every request had been deleted. After a status change, a failed refresh emptied a table that had just been showing data.
+
+### Root cause
+In `app/page.js`, `loadRequests()`'s error handler set the list to empty (`setRequests([])`) and never set the table error message. The page then couldn't tell "loaded successfully, and there are zero requests" apart from "failed to load."
+
+### Fix
+`app/page.js`:
+- New `loadState` ("loading" → "ready", or "error") tracks whether the list ever loaded successfully.
+- On failure, the existing list is **kept on screen** (not wiped), and the table shows: "Could not load the latest requests. Check your connection and refresh the page."
+- "No requests to show yet." now appears only after a *successful* load that returned zero requests. While loading, it shows "Loading requests…".
+- A failed status update that returns a non-JSON error no longer crashes the error handler.
+
+### Verification
+**How did you test the fix?**
+The page compiles and loads (HTTP 200).
+_To do on the live site: with the table loaded, turn the browser offline (DevTools → Network → Offline) and change a status. Expect the error message and the table to stay visible. Reload while offline: no "No requests to show yet."_
+
+**What happened after the fix?**
+_To do._
+
+**Evidence or notes:**
+—
+
+---
+
+## Issue #18: Soft hyphens end up in copied text (security audit: Low, regression from #13/#15)
+
+**Date:** 2026-11-24
+**Status:** ☐ Open ☑ Fixed ☐ Needs follow-up
+
+**Found during:**
+☐ Valid-entry test
+☐ Empty-form test
+☐ Duplicate test
+☐ Unrealistic-value test
+☐ Math check
+☑ Other: Security audit (OpenCode)
+
+### Symptom
+**What did you do?**
+The audit reviewed the Issue #13/#15 wrapping fix.
+
+**What did you expect?**
+Copying a name or description from the table would copy exactly what was entered.
+
+**What happened instead?**
+The wrapping fix inserts invisible soft-hyphen characters (U+00AD) every 12 characters into long words. Copying that text pastes the hidden characters into emails, tickets or spreadsheets, where they can break searches and exact matches.
+
+### Root cause
+To show a "-" where long unbroken text breaks, the fix changed the displayed text itself rather than just its styling. Browsers copy the text as displayed, hidden characters included.
+
+### Fix
+`app/page.js`: kept the soft hyphens (they're the only way to show a "-" at the line break, which was the requirement), and added a **copy handler** on the table. When copied text contains soft hyphens, it puts a clean version, with them removed, on the clipboard. Copies without soft hyphens behave normally. The saved data and CSV export never contained soft hyphens.
+
+The audit suggested a CSS-only fix (`overflow-wrap: anywhere`) instead. That would also keep the table inside the card (the CSS safety net is already in place), but it can't show a "-" at the break for text that isn't a dictionary word. If the "-" isn't needed, removing `breakLongWords()` gives the simplest CSS-only solution.
+
+### Verification
+**How did you test the fix?**
+The page compiles and loads (HTTP 200).
+_To do on the live site: add a request with a long unbroken description, select and copy it from the table (Ctrl+C), paste it into the browser console inside quotes and check `.includes("\u00AD")` returns `false` (or compare the pasted length with the original)._
+
+**What happened after the fix?**
+_To do._
+
+**Evidence or notes:**
+Limitation: dragging selected text (instead of Ctrl+C or right-click → Copy) bypasses the copy handler.

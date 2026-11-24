@@ -36,6 +36,16 @@ function breakLongWords(text) {
   );
 }
 
+// The soft hyphens are for display only. When someone copies text from the
+// table, put the clean text (without them) on the clipboard, so pasting into
+// email, tickets, or spreadsheets gets exactly what was entered.
+function copyWithoutSoftHyphens(event) {
+  const selected = window.getSelection()?.toString() ?? "";
+  if (!selected.includes(SOFT_HYPHEN)) return; // nothing to clean; normal copy
+  event.preventDefault();
+  event.clipboardData.setData("text/plain", selected.split(SOFT_HYPHEN).join(""));
+}
+
 function truncate(text) {
   if (!text) {
     return "";
@@ -53,6 +63,9 @@ export default function HomePage() {
   const [message, setMessage] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [tableError, setTableError] = useState("");
+  // "loading" until the first successful load, "ready" after any success,
+  // "error" if loading failed. Only "ready" + no rows means "no requests".
+  const [loadState, setLoadState] = useState("loading");
 
   async function loadSummary() {
     try {
@@ -75,8 +88,14 @@ export default function HomePage() {
       }
       const data = await response.json();
       setRequests(data.requests || []);
+      setLoadState("ready");
     } catch (error) {
-      setRequests([]);
+      // Keep whatever is already on screen (don't pretend the list is empty)
+      // and tell the user the refresh failed.
+      setLoadState((current) => (current === "ready" ? "ready" : "error"));
+      setTableError(
+        "Could not load the latest requests. Check your connection and refresh the page."
+      );
     }
   }
 
@@ -135,7 +154,7 @@ export default function HomePage() {
       });
 
       if (!response.ok) {
-        const data = await response.json();
+        const data = await response.json().catch(() => ({}));
         setTableError(data.error || "Could not update that status.");
       }
     } catch (error) {
@@ -260,9 +279,13 @@ export default function HomePage() {
         {tableError ? <p className="table-error">{tableError}</p> : null}
 
         {requests.length === 0 ? (
-          <p className="empty-state">No requests to show yet.</p>
+          loadState === "ready" ? (
+            <p className="empty-state">No requests to show yet.</p>
+          ) : loadState === "loading" ? (
+            <p className="empty-state">Loading requests…</p>
+          ) : null
         ) : (
-          <table className="requests-table">
+          <table className="requests-table" onCopy={copyWithoutSoftHyphens}>
             <thead>
               <tr>
                 <th>Date</th>

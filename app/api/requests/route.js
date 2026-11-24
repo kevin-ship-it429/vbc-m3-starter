@@ -1,4 +1,5 @@
 import { getAllRequests, addRequest, findOpenDuplicate } from "../../../lib/requests";
+import { rateLimit } from "../../../lib/rateLimit";
 
 // GET /api/requests — every request, newest first.
 export async function GET() {
@@ -58,6 +59,9 @@ function validateRequest(fields) {
 // POST /api/requests — validate, check for an open duplicate, then save.
 export async function POST(request) {
   try {
+    const limited = await rateLimit(request, "post");
+    if (limited) return limited;
+
     let body;
     try {
       body = await request.json();

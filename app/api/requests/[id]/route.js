@@ -1,10 +1,14 @@
 import { updateRequestStatus } from "../../../../lib/requests";
+import { rateLimit } from "../../../../lib/rateLimit";
 
 const STATUSES = ["New", "In Progress", "Complete"];
 
 // PATCH /api/requests/[id] — update one request's status.
 export async function PATCH(request, { params }) {
   try {
+    const limited = await rateLimit(request, "patch");
+    if (limited) return limited;
+
     const { id: rawId } = await params;
     const id = Number(rawId);
 
