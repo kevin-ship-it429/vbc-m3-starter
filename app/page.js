@@ -25,6 +25,17 @@ function formatDate(value) {
   });
 }
 
+// Long unbroken text (no spaces) would stretch the table past its card.
+// Insert invisible "soft hyphens" every 12 characters inside any word longer
+// than 15 characters. The browser only shows them — as "-" — at the exact
+// spot where it needs to break the line; elsewhere they stay invisible.
+const SOFT_HYPHEN = "­";
+function breakLongWords(text) {
+  return text.replace(/\S{16,}/g, (word) =>
+    word.match(/.{1,12}/g).join(SOFT_HYPHEN)
+  );
+}
+
 function truncate(text) {
   if (!text) {
     return "";
@@ -268,7 +279,9 @@ export default function HomePage() {
                   <td className="date-cell">{formatDate(request.created_at)}</td>
                   <td>{request.requester_name}</td>
                   <td>{request.location}</td>
-                  <td>{truncate(request.description)}</td>
+                  <td className="description-cell">
+                    {breakLongWords(truncate(request.description))}
+                  </td>
                   <td>
                     <span
                       className={

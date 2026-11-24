@@ -1,4 +1,4 @@
-import { getAllRequests, addRequest } from "../../../lib/requests";
+import { getAllRequests, addRequest, findOpenDuplicate } from "../../../lib/requests";
 
 // GET /api/requests — every request, newest first.
 export async function GET() {
@@ -55,7 +55,7 @@ function validateRequest(fields) {
   return null;
 }
 
-// POST /api/requests — validate, then save a new request as a row in the CSV.
+// POST /api/requests — validate, check for an open duplicate, then save.
 export async function POST(request) {
   try {
     let body;
@@ -80,6 +80,19 @@ export async function POST(request) {
     const error = validateRequest(fields);
     if (error) {
       return Response.json({ error }, { status: 400 });
+    }
+
+    const duplicate = await findOpenDuplicate(fields);
+    if (duplicate) {
+      return Response.json(
+        {
+          error:
+            `This looks like a duplicate of request #${duplicate.id} ` +
+            `(same requester, location, and description), which is still ` +
+            `${duplicate.status}. Update that request instead of submitting it again.`,
+        },
+        { status: 409 }
+      );
     }
 
     const saved = await addRequest(fields);

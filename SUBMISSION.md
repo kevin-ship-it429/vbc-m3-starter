@@ -32,11 +32,11 @@
 
 | # | Check | What I did | Result | Fix made |
 |---|---|---|---|---|
-| 1 | Valid entry | [YOUR TEST] | [YOUR RESULT] | [YOUR FIX] |
-| 2 | Empty form | [YOUR TEST] | [YOUR RESULT] | [YOUR FIX] |
-| 3 | Duplicate-ish | [YOUR TEST] | [YOUR RESULT] | [YOUR FIX] |
-| 4 | Absurd values | [YOUR TEST] | [YOUR RESULT] | [YOUR FIX] |
-| 5 | Hand-checked tile math | [YOUR TEST] | [YOUR RESULT] | [YOUR FIX] |
+| 1 | Valid entry | On the live site, submitted "TEST - Happy Path" (Austin, Medium) with a valid description, then refreshed. | **Pass.** Saved as #29 with status New, listed first after refresh, Open requests tile went up by 1 (14 → 15). | None needed. |
+| 2 | Empty form | Submitted a fully blank form, a form with only spaces/tabs, an empty request body, and a form with only Description blank. | **Pass.** All rejected with 400 and a message naming the missing fields, e.g. "Please fill in all fields: Requester name, Location, Description and Priority are required." / "Description is required." Nothing saved. | None needed. |
+| 3 | Duplicate-ish | Submitted the identical request "TEST - Duplicate" (Chicago, High) twice in a row. | **Fail.** Both saved as #30 and #31, one second apart, counting twice in Open requests. | Added a server-side duplicate check: an open request with the same requester, location, and description (ignoring capitalization/spacing) is rejected with 409 "This looks like a duplicate of request #30…". Verified locally; see DEBUG-LOG Issue #12. |
+| 4 | Absurd values | Tried a 101-char name, 501-char description, location "Paris" and "denver", priority "ASAP", a number as the name, non-JSON, sneaking in status "Complete"/id 1, `<script>` and SQL-looking text, and status "Done" / ids 0, -1, 1.5, 99999999999999999999 on the status update. | **Pass.** Every bad value rejected with a clear 400/404 message; exactly 500 chars saved; sneaked-in status/id ignored (saved as New with a new id); script and SQL text stored as plain text and shown harmlessly; table intact. | None needed. (Requester name limit of 100 was added earlier, DEBUG-LOG Issue #9.) |
+| 5 | Hand-checked tile math | Pulled every request from the live site and counted by hand: status not Complete; open + Urgent; Complete in the month of the newest request (Nov 2026). | **Pass.** Hand count 20 / 2 / 1 matched the tiles exactly (20 / 2 / 1). Urgent open = #22 Alison Vo and #15 Priya Raghunathan; completed in Nov = #25 Bob. | None needed. (Note: "Completed this month" follows the newest request's month, so it dropped from 5 to 0–1 once November requests existed. DEBUG-LOG Issue #3.) |
 
 ## Known limitations
 

@@ -462,7 +462,7 @@ On very narrow (phone-sized) screens the table may get slightly wider, since the
 ## Issue #11: Submitting a request on the live site returns a 500 error
 
 **Date:** 2026-11-24
-**Status:** ☑ Open ☐ Fixed ☐ Needs follow-up
+**Status:** ☐ Open ☑ Fixed ☐ Needs follow-up
 
 **Found during:**
 ☑ Valid-entry test
@@ -493,17 +493,133 @@ Evidence:
 - Netlify request log: `POST /api/requests` → 500 at 2026-11-24 20:00 UTC, from the Next.js server handler.
 - Reproduced with a direct valid POST: same 500 and the same error message. The tiles stayed at 9 / 2 / 5.
 - `GET /api/requests`, `/api/summary` and `/api/export` all returned 200 on the live site, so only writes fail.
-- To do: copy the exact error from **Netlify → Logs → Functions** (expected: `EROFS: read-only file system`).
+- Optional: copy the exact error from **Netlify → Logs → Functions** (expected: `EROFS: read-only file system`).
 
 ### Fix
-In progress: move storage from the CSV file to a Supabase database (project `morrowlane-service-requests`).
+Moved storage from the CSV file to a **Supabase** database (project `morrowlane-service-requests`, table `requests`):
+1. Created the `requests` table in Supabase and ran `supabase/setup.sql` to load the 22 seed requests (ids 1–22) and add access rules that let the app read, add and update requests, but not delete them.
+2. Rewrote `lib/requests.js` to read, insert and update through `@supabase/supabase-js`. The function names stayed the same, so the API routes and the page didn't change.
+3. Added `SUPABASE_URL` and `SUPABASE_ANON_KEY` to `.env.local` (local, not committed) and to Netlify's environment variables (live site).
+4. Committed and pushed (commit `931f250`), which triggered a new Netlify deploy.
+
+**Almost-right moment during the fix:** after adding the Netlify variables and clicking Redeploy, the live site still returned 500. The Supabase code had never been committed or pushed, so Netlify rebuilt the old CSV commit (`eba4f1a`). The tiles proved it: the live site showed 9 / 2 / 5 (CSV data) while local showed 10 / 2 / 0 (Supabase data). Pushing the commit fixed it.
 
 ### Verification
 **How did you test the fix?**
-_To do after the fix is deployed: submit a valid request on the live site, refresh, then change its status and refresh again._
+On the live site, submitted valid requests, refreshed, changed their statuses, and refreshed again. Tested all the endpoints: table, tiles, submit, status change and export.
 
 **What happened after the fix?**
-_To do._
+Everything worked and the data stayed after a refresh. The live data now includes:
+- id 24 "Frank": submitted, then changed to **In Progress**
+- id 25 "Bob": submitted, then changed to **Complete**
+
+The live tiles moved to 11 / 2 / 1, which is consistent with these changes: two new open requests, and Bob counting as completed in November, the month of the newest request. A request saved from the local app (id 23) also appears on the live site, which shows both use the same database.
 
 **Evidence or notes:**
-_To do._
+- Commit `931f250`: "Move storage from CSV file to Supabase"
+- Netlify env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY` (values not recorded here)
+- Test rows 23–25 are still in Supabase. Delete them in Table Editor if they're not wanted; the tiles will return to 9 / 2 / 5.
+- Add a screenshot of the live table after refresh, if possible.
+
+---
+
+## Issue #12: The same request can be submitted twice
+
+**Date:** 2026-11-24
+**Status:** ☐ Open ☑ Fixed ☐ Needs follow-up
+
+**Found during:**
+☐ Valid-entry test
+☐ Empty-form test
+☑ Duplicate test
+☐ Unrealistic-value test
+☐ Math check
+☐ Other: __________
+
+### Symptom
+**What did you do?**
+On the live site, submitted the same request twice in a row: Requester "TEST - Duplicate", Chicago, "Duplicate test: identical submission", High.
+
+**What did you expect?**
+The second submission would be rejected (or at least flagged) as a duplicate.
+
+**What happened instead?**
+Both were saved as separate requests, **#30 and #31**, one second apart, both "New". The Open requests tile went up by 2 for one real issue, so a coordinator could send two people to fix the same problem.
+
+### Root cause
+The POST endpoint checked that each field was filled in and allowed, but never compared a new request against existing ones. Every valid submission was saved, no matter what was already in the table.
+
+### Fix
+Added a duplicate check before saving:
+- `lib/requests.js`: new `findOpenDuplicate()` looks for an **open** request (status not Complete) with the same requester, location and description, ignoring capitalization and extra spaces.
+- `app/api/requests/route.js`: if one is found, return **409** with: "This looks like a duplicate of request #30 (same requester, location, and description), which is still New. Update that request instead of submitting it again." The page shows this next to the Submit button.
+
+Design choices:
+- **Completed requests don't count**, so a recurring job (e.g. "Quarterly deep clean") can be requested again once the last one is done.
+- **Priority is ignored** in the comparison, so resubmitting the same problem as "Urgent" is still caught. The right move is to update the existing request.
+- **A different location is allowed**, since it's a different site.
+
+### Verification
+**How did you test the fix?**
+Ran against the local app, which uses the same Supabase database as the live site:
+
+| Test | Result |
+|---|---|
+| Exact repeat of "TEST - Duplicate" (Chicago) | 409, duplicate of #30 (not saved) ✅ |
+| Same text in different capitals and spacing, different priority | 409, duplicate of #30 ✅ |
+| Same text, different location (Denver) | 201, saved (#35) ✅ |
+| Resubmit a **Completed** seed request (Dana Whitfield, HVAC) | 201, saved (#36) ✅ |
+| Brand-new valid request | 201, saved (#37) ✅ |
+| Empty form | 400, still blocked ✅ |
+
+**What happened after the fix?**
+Locally: duplicates are blocked and everything else saves normally.
+_Live site: to do after the fix is pushed and deployed. Submit the same request twice on the live site and confirm the second one shows the duplicate message, then refresh and confirm only one row exists._
+
+**Evidence or notes:**
+- Rows #30/#31 (the original duplicates) and the test rows from this pass (#29, #32–#35, #37, plus #36 "Dana Whitfield") are in Supabase; delete them in Table Editor when done.
+- Known limitation: two identical submissions sent at the *exact* same moment could both pass the check. A database-level unique rule would close that gap.
+
+---
+
+## Issue #13: Long unbroken description pushes Priority and Status outside the card
+
+**Date:** 2026-11-24
+**Status:** ☐ Open ☑ Fixed ☐ Needs follow-up
+
+**Found during:**
+☐ Valid-entry test
+☐ Empty-form test
+☐ Duplicate test
+☑ Unrealistic-value test
+☐ Math check
+☐ Other: __________
+
+### Symptom
+**What did you do?**
+Viewed the Requests table after the absurd-values test saved a 500-character description: "TEST - 500 chars zzzzzzzz…" (request #33).
+
+**What did you expect?**
+The description would wrap inside its column and the table would stay inside the white card.
+
+**What happened instead?**
+The long run of "z"s with no spaces couldn't wrap, so it stretched the Description column and pushed the **Priority** and **Status** columns out past the white background into the grey page border.
+
+### Root cause
+Browsers only wrap text at spaces (and a few punctuation marks) by default. The table shows the first 80 characters of a description, and here about 63 of them were one unbroken "word". The browser had nowhere to break it, so it widened the table instead.
+
+### Fix
+- `app/page.js`: new `breakLongWords()` adds invisible **soft hyphens** every 12 characters inside any word longer than 15 characters. The browser shows one as **"-"** only where it actually breaks the line; elsewhere it stays invisible. Normal descriptions with spaces are unchanged.
+- `app/globals.css`: the description cell gets `overflow-wrap: anywhere` as a last-resort safety net, so nothing can push the other columns out.
+
+The saved data is unchanged. This only affects how descriptions are displayed, so the CSV export still contains the original text.
+
+### Verification
+**How did you test the fix?**
+Ran the break logic on sample text: the 500-char test description gets break points every 12 characters; "Water leak under the breakroom sink, floor 6" is untouched; a long URL gets break points. The page compiles and loads (HTTP 200).
+
+**What happened after the fix?**
+_To do on the live site after deploy: add a description that's one long word, then check that it wraps with a "-" at each line break and that Priority and Status stay inside the white card. Also narrow the window to check._
+
+**Evidence or notes:**
+A before/after screenshot of the table would be good evidence. The Requester name column could have the same problem with a 100-character unbroken name; it isn't covered by this fix.
