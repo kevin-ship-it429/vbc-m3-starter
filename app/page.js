@@ -277,9 +277,11 @@ export default function HomePage() {
               {requests.map((request) => (
                 <tr key={request.id}>
                   <td className="date-cell">{formatDate(request.created_at)}</td>
-                  <td>{request.requester_name}</td>
+                  <td className="wrap-cell">
+                    {breakLongWords(request.requester_name)}
+                  </td>
                   <td>{request.location}</td>
-                  <td className="description-cell">
+                  <td className="wrap-cell">
                     {breakLongWords(truncate(request.description))}
                   </td>
                   <td>

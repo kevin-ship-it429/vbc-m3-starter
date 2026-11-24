@@ -234,10 +234,10 @@ button[type="submit"]:disabled {
   white-space: nowrap;
 }
 
-/* Wrap descriptions at spaces; long unbroken text breaks at the soft
-   hyphens added in page.js (shown as "-"), with a last-resort break
-   anywhere so the Priority and Status columns stay inside the card. */
-.requests-table .description-cell {
+/* Requester and Description cells: wrap at spaces; long unbroken text
+   breaks at the soft hyphens added in page.js (shown as "-"), with a
+   last-resort break anywhere so other columns stay inside the card. */
+.requests-table .wrap-cell {
   white-space: normal;
   overflow-wrap: anywhere;
   hyphens: manual;

@@ -623,3 +623,88 @@ _To do on the live site after deploy: add a description that's one long word, th
 
 **Evidence or notes:**
 A before/after screenshot of the table would be good evidence. The Requester name column could have the same problem with a 100-character unbroken name; it isn't covered by this fix.
+
+---
+
+## Issue #14: Exported CSV can run spreadsheet formulas (CSV injection)
+
+**Date:** 2026-11-24
+**Status:** ☐ Open ☑ Fixed ☐ Needs follow-up
+
+**Found during:**
+☐ Valid-entry test
+☐ Empty-form test
+☐ Duplicate test
+☑ Unrealistic-value test
+☐ Math check
+☐ Other: __________
+
+### Symptom
+**What did you do?**
+Reviewed the live data after the test pass. Request #27 had the Requester name `=HYPERLINK("https://evil.example/?x=1","CLICK-ME")` and the description `=1+1 CSV injection probe`.
+
+**What did you expect?**
+Exported text would open in a spreadsheet as plain text.
+
+**What happened instead?**
+The export wrote these values exactly as entered. Excel and Google Sheets treat any cell starting with `=`, `+`, `-` or `@` as a **formula**, so opening the export would turn #27's name into a live clickable link to an outside website, and `=1+1` would show as `2`.
+
+### Root cause
+The form accepts any text (correctly; names and descriptions are free text), and the export copied it into the CSV unchanged. CSV is just text, so the spreadsheet app decides what a cell means, and a leading `=` means "formula."
+
+### Fix
+`app/api/export/route.js`: new `neutralizeFormula()` adds a `'` in front of any exported value that starts with `=`, `+`, `-`, `@`, a tab or a carriage return. Spreadsheets treat a leading `'` as "show this as text." Only the export is changed; the saved data and the table on the page show the text exactly as entered.
+
+### Verification
+**How did you test the fix?**
+Downloaded the export from the local app, which uses the same Supabase data.
+
+**What happened after the fix?**
+- #27 exports as `'=HYPERLINK(...)` and `'=1+1 CSV injection probe`, so it's shown as text, not run as a formula ✅
+- Normal rows (e.g. #1 Dana Whitfield, #6 "Water leak…, floor 6") are unchanged ✅
+- _To do on the live site after deploy: download the export, open it in Excel or Google Sheets, and confirm #27 shows as plain text, not a link. (Do this before deleting the test rows.)_
+
+**Evidence or notes:**
+A description that legitimately starts with "-" (e.g. "- fix door") also gets a `'` in the export. That's harmless and is the standard trade-off for this protection.
+
+---
+
+## Issue #15: Long unbroken Requester name can stretch the table
+
+**Date:** 2026-11-24
+**Status:** ☐ Open ☑ Fixed ☐ Needs follow-up
+
+**Found during:**
+☐ Valid-entry test
+☐ Empty-form test
+☐ Duplicate test
+☑ Unrealistic-value test
+☐ Math check
+☐ Other: __________
+
+### Symptom
+**What did you do?**
+Follow-up to Issue #13: the Requester name allows up to 100 characters, which could be one unbroken "word."
+
+**What did you expect?**
+A long name would wrap within its column.
+
+**What happened instead?**
+The Issue #13 fix only covered Description. A 100-character name with no spaces would stretch the Requester column and push other columns out of the card, the same way #33's description did.
+
+### Root cause
+Same as Issue #13: browsers only wrap at spaces by default, and the wrapping fix had only been applied to the Description cell.
+
+### Fix
+- `app/page.js`: the Requester cell now uses the same `breakLongWords()` (soft hyphens every 12 characters in words longer than 15).
+- `app/globals.css`: renamed the cell style to `.wrap-cell` and applied it to both Requester and Description.
+
+### Verification
+**How did you test the fix?**
+The page compiles and loads (HTTP 200). Same logic as Issue #13.
+
+**What happened after the fix?**
+_To do on the live site after deploy: submit a request with a long unbroken name (e.g. 60+ letters, no spaces), check that it wraps with a "-" and that Priority and Status stay inside the white card._
+
+**Evidence or notes:**
+A screenshot would be good evidence.
