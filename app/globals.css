@@ -229,6 +229,11 @@ button[type="submit"]:disabled {
   vertical-align: middle;
 }
 
+/* Keep dates like "Aug 28, 2026" on one line. */
+.requests-table .date-cell {
+  white-space: nowrap;
+}
+
 .requests-table th {
   font-size: 12px;
   text-transform: uppercase;

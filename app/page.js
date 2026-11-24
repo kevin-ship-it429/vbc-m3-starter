@@ -172,6 +172,7 @@ export default function HomePage() {
               id="requester_name"
               name="requester_name"
               type="text"
+              maxLength={100}
               value={form.requester_name}
               onChange={handleFieldChange}
             />
@@ -264,7 +265,7 @@ export default function HomePage() {
             <tbody>
               {requests.map((request) => (
                 <tr key={request.id}>
-                  <td>{formatDate(request.created_at)}</td>
+                  <td className="date-cell">{formatDate(request.created_at)}</td>
                   <td>{request.requester_name}</td>
                   <td>{request.location}</td>
                   <td>{truncate(request.description)}</td>
