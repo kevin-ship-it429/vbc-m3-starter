@@ -1,8 +1,8 @@
 # Module 3 Playbook Submission — Service Request Portal
 
 **Name:** [YOUR NAME]
-**Live URL:** [YOUR NETLIFY URL]
-**Repo:** [YOUR GITHUB REPO URL]
+**Live URL:** https://morrowlane-service-requests.netlify.app
+**Repo:** https://github.com/kevin-ship-it429/vbc-m3-starter
 
 ## What I built
 

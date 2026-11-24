@@ -456,3 +456,54 @@ Dates should show on one line, e.g. "Aug 28, 2026". Confirm this in the browser 
 
 **Evidence or notes:**
 On very narrow (phone-sized) screens the table may get slightly wider, since the date column can no longer shrink by wrapping. A before/after screenshot would be good evidence here.
+
+---
+
+## Issue #11: Submitting a request on the live site returns a 500 error
+
+**Date:** 2026-11-24
+**Status:** ☑ Open ☐ Fixed ☐ Needs follow-up
+
+**Found during:**
+☑ Valid-entry test
+☐ Empty-form test
+☐ Duplicate test
+☐ Unrealistic-value test
+☐ Math check
+☐ Other: __________
+
+### Symptom
+**What did you do?**
+On the live Netlify site (https://morrowlane-service-requests.netlify.app), filled in a valid New request form and clicked **Submit request**.
+
+**What did you expect?**
+The request would save and appear in the table, the same way it does locally.
+
+**What happened instead?**
+The request did not save. The browser console showed:
+```
+Failed to load resource: the server responded with a status of 500 ()
+```
+The server's response was `{"error":"Could not save the request. Please try again."}`.
+
+### Root cause
+Locally, `npm run dev` is a normal program that can edit `data/seed-requests.csv`. On Netlify, the API runs as a **serverless function**: a short-lived copy of the code started on demand, where the deployed files are **read-only**. Reading the CSV works (the table, tiles and export all load), but adding a row is refused. Even if writing were allowed, each copy is temporary and several can run at once, so saved data would vanish on a later request.
+
+Evidence:
+- Netlify request log: `POST /api/requests` → 500 at 2026-11-24 20:00 UTC, from the Next.js server handler.
+- Reproduced with a direct valid POST: same 500 and the same error message. The tiles stayed at 9 / 2 / 5.
+- `GET /api/requests`, `/api/summary` and `/api/export` all returned 200 on the live site, so only writes fail.
+- To do: copy the exact error from **Netlify → Logs → Functions** (expected: `EROFS: read-only file system`).
+
+### Fix
+In progress: move storage from the CSV file to a Supabase database (project `morrowlane-service-requests`).
+
+### Verification
+**How did you test the fix?**
+_To do after the fix is deployed: submit a valid request on the live site, refresh, then change its status and refresh again._
+
+**What happened after the fix?**
+_To do._
+
+**Evidence or notes:**
+_To do._

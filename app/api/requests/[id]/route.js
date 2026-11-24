@@ -8,7 +8,7 @@ export async function PATCH(request, { params }) {
     const { id: rawId } = await params;
     const id = Number(rawId);
 
-    if (!Number.isInteger(id) || id < 1) {
+    if (!Number.isSafeInteger(id) || id < 1) {
       return Response.json(
         { error: `No request found with id "${rawId}".` },
         { status: 404 }
