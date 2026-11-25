@@ -666,7 +666,7 @@ Downloaded the export from the local app, which uses the same Supabase data.
 **What happened after the fix?**
 - #27 exports as `'=HYPERLINK(...)` and `'=1+1 CSV injection probe`, so it's shown as text, not run as a formula ✅
 - Normal rows (e.g. #1 Dana Whitfield, #6 "Water leak…, floor 6") are unchanged ✅
-- _To do on the live site after deploy: download the export, open it in Excel or Google Sheets, and confirm #27 shows as plain text, not a link. (Do this before deleting the test rows.)_
+- **Live site:** downloaded the export and opened it in **Excel**. The formula-probe rows showed as plain text, not as links or calculated values ✅
 
 **Evidence or notes:**
 A description that legitimately starts with "-" (e.g. "- fix door") also gets a `'` in the export. That's harmless and is the standard trade-off for this protection.
@@ -708,7 +708,7 @@ Same as Issue #13: browsers only wrap at spaces by default, and the wrapping fix
 The page compiles and loads (HTTP 200). Same logic as Issue #13.
 
 **What happened after the fix?**
-_To do on the live site after deploy: submit a request with a long unbroken name (e.g. 60+ letters, no spaces), check that it wraps with a "-" and that Priority and Status stay inside the white card._
+On the live site (after deploy `a11dcf5`): submitted a request with a long unbroken Requester name. The name wrapped with "-" at the line breaks and stayed inside the white card ✅
 
 **Evidence or notes:**
 A screenshot would be good evidence.
@@ -890,10 +890,10 @@ Kept the 80-character preview so the table stays compact, and added a **hover to
 ### Verification
 **How did you test the fix?**
 The page compiles and loads locally (HTTP 200).
-_To do on the live site after deploy: hover over a description that ends in "…" and confirm the full text appears._
+On the live site (after deploy `a11dcf5`): hovered over a description that ends in "…".
 
 **What happened after the fix?**
-_To do._
+The tooltip showed the full description ✅
 
 **Evidence or notes:**
 Limitations: the tooltip needs a mouse (it doesn't appear on phones or tablets or for keyboard-only users), and copying from the table still copies only the 80-character preview. The full text is always in the CSV export.
